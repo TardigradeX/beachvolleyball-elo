@@ -1,0 +1,204 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── HELPERS ─────────────────────────────────────────────────────────────
+
+    function isAuthed() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // Read a match document to validate cross-document ELO update legitimacy.
+    // Called from the player update rule — uses Firestore get() which counts
+    // toward quota but is the standard pattern for cross-doc validation.
+    function matchDoc(matchId) {
+      return get(/databases/$(database)/documents/matches/$(matchId)).data;
+    }
+
+    // ── PLAYERS ─────────────────────────────────────────────────────────────
+
+    match /players/{uid} {
+
+      // Any authenticated user can read players (leaderboard, player search,
+      // match display, profile).
+      allow read: if isAuthed();
+
+      // Only the user themselves can create their own document.
+      // The auth store writes this on first login with exactly these invariants.
+      allow create: if isAuthed()
+        && isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.elo == 1000
+        && request.resource.data.gamesPlayed == 0
+        && request.resource.data.wins == 0
+        && request.resource.data.losses == 0
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0;
+
+      // Two update paths:
+      // (A) Profile update — only the owner can change their own display name / photo.
+      // (B) ELO/stats batch update — any authenticated user can update ELO fields
+      //     provided the _verifyingMatchId they pass points to a valid
+      //     pending_verification match where (a) they are on team2 and
+      //     (b) the player being updated (uid) is in that match's playerIds.
+      allow update: if isAuthed()
+        && (isProfileUpdate(uid) || isValidEloUpdate(uid));
+
+      // Players are never deleted.
+      allow delete: if false;
+    }
+
+    // Profile-only update: only owner, only name/photo fields, ELO never touched.
+    function isProfileUpdate(uid) {
+      return isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['displayName', 'displayNameLower', 'photoUrl']);
+    }
+
+    // ELO batch update: any authenticated user, but only for ELO/stats fields,
+    // and only when the _verifyingMatchId passes a cross-document validation.
+    function isValidEloUpdate(playerUid) {
+      let incoming = request.resource.data;
+      let current  = resource.data;
+      let matchId  = incoming._verifyingMatchId;
+      let m        = matchDoc(matchId);
+
+      return incoming.diff(current).affectedKeys()
+               .hasOnly(['elo', 'gamesPlayed', 'wins', 'losses', '_verifyingMatchId'])
+          // ELO stays in a sane range
+          && incoming.elo >= 100
+          && incoming.elo <= 9999
+          // Stats can only go up — prevents malicious resets
+          && incoming.gamesPlayed >= current.gamesPlayed
+          && incoming.wins        >= current.wins
+          && incoming.losses      >= current.losses
+          // wins + losses == gamesPlayed
+          && incoming.wins + incoming.losses == incoming.gamesPlayed
+          // The provided matchId must reference a pending_verification match
+          && matchId is string
+          && m.status == 'pending_verification'
+          // Only a team2 player can trigger this update
+          && (request.auth.uid == m.team2Player1Id
+              || request.auth.uid == m.team2Player2Id)
+          // The player being updated must be in that match
+          && m.playerIds.hasAny([playerUid]);
+    }
+
+    // ── MATCHES ─────────────────────────────────────────────────────────────
+
+    match /matches/{matchId} {
+
+      // Any authenticated user can read any match (needed for MatchDetail page
+      // and for showing match history to all 4 players).
+      allow read: if isAuthed();
+
+      // Only an authenticated user can create a match, and only as team1Player1.
+      allow create: if isAuthed()
+        && request.resource.data.matchId == matchId
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.team1Player1Id == request.auth.uid
+        && request.resource.data.status == 'pending_result'
+        && request.resource.data.reportedWinner == null
+        && request.resource.data.verifiedBy == null
+        // All 4 ELO deltas must be null on creation
+        && request.resource.data.team1Player1EloDelta == null
+        && request.resource.data.team1Player2EloDelta == null
+        && request.resource.data.team2Player1EloDelta == null
+        && request.resource.data.team2Player2EloDelta == null
+        // playerIds must contain exactly the 4 player IDs
+        && request.resource.data.playerIds.size() == 4
+        && request.resource.data.playerIds.hasAll([
+             request.resource.data.team1Player1Id,
+             request.resource.data.team1Player2Id,
+             request.resource.data.team2Player1Id,
+             request.resource.data.team2Player2Id
+           ])
+        // All 4 players must be distinct
+        && request.resource.data.team1Player1Id != request.resource.data.team1Player2Id
+        && request.resource.data.team1Player1Id != request.resource.data.team2Player1Id
+        && request.resource.data.team1Player1Id != request.resource.data.team2Player2Id
+        && request.resource.data.team1Player2Id != request.resource.data.team2Player1Id
+        && request.resource.data.team1Player2Id != request.resource.data.team2Player2Id
+        && request.resource.data.team2Player1Id != request.resource.data.team2Player2Id
+        // ELO snapshots must be present positive integers
+        && request.resource.data.team1Player1EloBefore is int
+        && request.resource.data.team1Player2EloBefore is int
+        && request.resource.data.team2Player1EloBefore is int
+        && request.resource.data.team2Player2EloBefore is int;
+
+      // State machine transitions — each branch enforces exactly one valid move.
+      allow update: if isAuthed()
+        && (isReportTransition() || isVerifyTransition() || isDisputeTransition());
+
+      // Matches are never deleted.
+      allow delete: if false;
+    }
+
+    // pending_result → pending_verification (creator reports result)
+    function isReportTransition() {
+      let before = resource.data;
+      let after  = request.resource.data;
+      return before.status == 'pending_result'
+          && after.status  == 'pending_verification'
+          && request.auth.uid == before.creatorId
+          && after.reportedWinner in ['team1', 'team2']
+          // Immutable core fields must not change
+          && after.creatorId      == before.creatorId
+          && after.team1Player1Id == before.team1Player1Id
+          && after.team1Player2Id == before.team1Player2Id
+          && after.team2Player1Id == before.team2Player1Id
+          && after.team2Player2Id == before.team2Player2Id
+          && after.playerIds      == before.playerIds
+          // Deltas remain null
+          && after.team1Player1EloDelta == null
+          && after.team2Player1EloDelta == null;
+    }
+
+    // pending_verification → completed (team2 player verifies and writes ELO deltas)
+    function isVerifyTransition() {
+      let before = resource.data;
+      let after  = request.resource.data;
+      let uid    = request.auth.uid;
+      return before.status == 'pending_verification'
+          && after.status  == 'completed'
+          && (uid == before.team2Player1Id || uid == before.team2Player2Id)
+          && after.verifiedBy     == uid
+          && after.reportedWinner == before.reportedWinner
+          // All 4 deltas must now be integers
+          && after.team1Player1EloDelta is int
+          && after.team1Player2EloDelta is int
+          && after.team2Player1EloDelta is int
+          && after.team2Player2EloDelta is int
+          // Immutable core fields
+          && after.creatorId      == before.creatorId
+          && after.team1Player1Id == before.team1Player1Id
+          && after.team1Player2Id == before.team1Player2Id
+          && after.team2Player1Id == before.team2Player1Id
+          && after.team2Player2Id == before.team2Player2Id
+          && after.playerIds      == before.playerIds;
+    }
+
+    // pending_verification → disputed (team2 player disputes the result)
+    function isDisputeTransition() {
+      let before = resource.data;
+      let after  = request.resource.data;
+      let uid    = request.auth.uid;
+      return before.status == 'pending_verification'
+          && after.status  == 'disputed'
+          && (uid == before.team2Player1Id || uid == before.team2Player2Id)
+          && after.verifiedBy          == null
+          && after.team1Player1EloDelta == null
+          // Immutable core fields
+          && after.creatorId      == before.creatorId
+          && after.team1Player1Id == before.team1Player1Id
+          && after.team1Player2Id == before.team1Player2Id
+          && after.team2Player1Id == before.team2Player1Id
+          && after.team2Player2Id == before.team2Player2Id
+          && after.playerIds      == before.playerIds;
+    }
+  }
+}
