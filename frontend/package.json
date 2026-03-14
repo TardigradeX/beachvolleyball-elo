@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "seed": "node scripts/seed-players.mjs",
+    "seed:prod": "node scripts/seed-players.mjs --prod"
   },
   "dependencies": {
     "firebase": "^10.12.0"

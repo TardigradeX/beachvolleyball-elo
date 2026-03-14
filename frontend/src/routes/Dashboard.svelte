@@ -65,9 +65,8 @@
     window.location.hash = path;
   }
 
-  function winRate(p: Player): string {
-    if (p.gamesPlayed === 0) return "—";
-    return `${Math.round((p.wins / p.gamesPlayed) * 100)}%`;
+  function wl(w: number, l: number): string {
+    return `${w} W · ${l} L`;
   }
 </script>
 
@@ -80,36 +79,41 @@
         <span class="body-medium">Loading…</span>
       </div>
     {:else if profile}
-      <div class="profile-main">
-        <div>
-          <div class="elo-display">{profile.elo}</div>
-          <div class="label-medium" style="opacity:.85">ELO Rating</div>
+      <div class="stat-blocks">
+        <!-- Gender ELO -->
+        <div class="stat-block">
+          <div class="stat-block-label">{profile.gender === "female" ? "Women's ELO" : "Men's ELO"}</div>
+          <div class="elo-display">{profile.eloGender}</div>
+          <div class="wl-line">{wl(profile.winsGender, profile.lossesGender)}</div>
         </div>
-        <div class="profile-stats">
-          <div class="stat">
-            <span class="stat-value">{profile.gamesPlayed}</span>
-            <span class="stat-label">Games</span>
+
+        <div class="block-divider"></div>
+
+        <!-- Mixed ELO -->
+        <div class="stat-block">
+          <div class="stat-block-label">Mixed ELO</div>
+          <div class="elo-display">{profile.eloMixed}</div>
+          <div class="wl-line">{wl(profile.winsMixed, profile.lossesMixed)}</div>
+        </div>
+
+        <div class="block-divider"></div>
+
+        <!-- Overall W/L -->
+        <div class="stat-block">
+          <div class="stat-block-label">Overall</div>
+          <div class="overall-wl">
+            <span class="wins">{profile.wins}</span>
+            <span class="overall-sep">–</span>
+            <span class="losses">{profile.losses}</span>
           </div>
-          <div class="stat">
-            <span class="stat-value wins">{profile.wins}</span>
-            <span class="stat-label">Wins</span>
-          </div>
-          <div class="stat">
-            <span class="stat-value losses">{profile.losses}</span>
-            <span class="stat-label">Losses</span>
-          </div>
-          {#if profile.gamesPlayed > 0}
-            <div class="stat">
-              <span class="stat-value">{winRate(profile)}</span>
-              <span class="stat-label">Win rate</span>
-            </div>
-          {/if}
+          <div class="wl-line">W – L</div>
         </div>
       </div>
     {:else}
       <div class="elo-display">1000</div>
       <div class="label-medium" style="opacity:.85">Starting ELO</div>
     {/if}
+
   </div>
 
   <!-- Action needed: needs your verification -->
@@ -216,26 +220,58 @@
     color: var(--md-on-primary);
   }
 
-  .profile-main {
+  .stat-blocks {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
+    align-items: stretch;
     gap: var(--md-spacing-lg);
+    flex-wrap: wrap;
+  }
+
+  .stat-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 100px;
+  }
+
+  .stat-block-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    opacity: 0.7;
   }
 
   .elo-display {
-    font-size: 3.5rem;
+    font-size: 2.75rem;
     font-weight: 700;
     line-height: 1;
     font-family: var(--md-font-mono);
   }
 
-  .profile-stats { display: flex; gap: var(--md-spacing-xl); }
+  .wl-line {
+    font-size: 0.8rem;
+    opacity: 0.8;
+  }
 
-  .stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-  .stat-value { font-size: 1.5rem; font-weight: 700; }
-  .stat-label { font-size: 0.75rem; opacity: 0.85; }
+  .block-divider {
+    width: 1px;
+    background: rgba(255,255,255,0.25);
+    align-self: stretch;
+    min-height: 48px;
+  }
+
+  .overall-wl {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 2.75rem;
+    font-weight: 700;
+    line-height: 1;
+    font-family: var(--md-font-mono);
+  }
+
+  .overall-sep { opacity: 0.5; font-size: 2rem; }
   .wins    { color: #a5d6a7; }
   .losses  { color: #ef9a9a; }
 

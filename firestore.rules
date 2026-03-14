@@ -32,10 +32,15 @@ service cloud.firestore {
       allow create: if isAuthed()
         && isOwner(uid)
         && request.resource.data.uid == uid
-        && request.resource.data.elo == 1000
-        && request.resource.data.gamesPlayed == 0
-        && request.resource.data.wins == 0
-        && request.resource.data.losses == 0
+        && request.resource.data.eloGender    == 1000
+        && request.resource.data.eloMixed     == 1000
+        && request.resource.data.gamesPlayed  == 0
+        && request.resource.data.wins         == 0
+        && request.resource.data.losses       == 0
+        && request.resource.data.winsGender   == 0
+        && request.resource.data.lossesGender == 0
+        && request.resource.data.winsMixed    == 0
+        && request.resource.data.lossesMixed  == 0
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() > 0;
 
@@ -56,7 +61,7 @@ service cloud.firestore {
     function isProfileUpdate(uid) {
       return isOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys()
-           .hasOnly(['displayName', 'displayNameLower', 'photoUrl']);
+           .hasOnly(['displayName', 'displayNameLower', 'photoUrl', 'gender']);
     }
 
     // ELO batch update: any authenticated user, but only for ELO/stats fields,
@@ -67,15 +72,20 @@ service cloud.firestore {
       let matchId  = incoming._verifyingMatchId;
       let m        = matchDoc(matchId);
 
+      let eloField  = m.matchType == 'mixed' ? 'eloMixed'    : 'eloGender';
+      let winsField = m.matchType == 'mixed' ? 'winsMixed'   : 'winsGender';
+      let lossField = m.matchType == 'mixed' ? 'lossesMixed' : 'lossesGender';
       return incoming.diff(current).affectedKeys()
-               .hasOnly(['elo', 'gamesPlayed', 'wins', 'losses', '_verifyingMatchId'])
+               .hasOnly([eloField, winsField, lossField, 'gamesPlayed', 'wins', 'losses', '_verifyingMatchId'])
           // ELO stays in a sane range
-          && incoming.elo >= 100
-          && incoming.elo <= 9999
+          && incoming[eloField] >= 100
+          && incoming[eloField] <= 9999
           // Stats can only go up — prevents malicious resets
-          && incoming.gamesPlayed >= current.gamesPlayed
-          && incoming.wins        >= current.wins
-          && incoming.losses      >= current.losses
+          && incoming.gamesPlayed  >= current.gamesPlayed
+          && incoming.wins         >= current.wins
+          && incoming.losses       >= current.losses
+          && incoming[winsField]   >= current[winsField]
+          && incoming[lossField]   >= current[lossField]
           // wins + losses == gamesPlayed
           && incoming.wins + incoming.losses == incoming.gamesPlayed
           // The provided matchId must reference a pending_verification match

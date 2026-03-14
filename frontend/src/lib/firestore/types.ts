@@ -1,5 +1,10 @@
 import type { Timestamp } from "firebase/firestore";
 
+// ── Shared enums ─────────────────────────────────────────────────────────────
+
+export type Gender    = "male" | "female";
+export type MatchType = "male" | "female" | "mixed";
+
 // ── Player ───────────────────────────────────────────────────────────────────
 
 export interface Player {
@@ -8,10 +13,21 @@ export interface Player {
   displayNameLower: string;
   email: string;
   photoUrl: string | null;
-  elo: number;
+  gender: Gender | null;
+  /** ELO used in gender-specific (male-only / female-only) matches */
+  eloGender: number;
+  /** ELO used in mixed matches */
+  eloMixed: number;
+  /** Overall stats (gender + mixed combined) */
   gamesPlayed: number;
   wins: number;
   losses: number;
+  /** Gender-match stats */
+  winsGender: number;
+  lossesGender: number;
+  /** Mixed-match stats */
+  winsMixed: number;
+  lossesMixed: number;
   createdAt: Timestamp;
 }
 
@@ -20,7 +36,8 @@ export interface PlayerSnapshot {
   id: string;
   displayName: string;
   photoUrl: string | null;
-  /** ELO at the time the match was created */
+  gender: Gender | null;
+  /** ELO at the time the match was created (relevant to the match type) */
   elo: number;
 }
 
@@ -36,6 +53,7 @@ export type TeamLabel = "team1" | "team2";
 
 export interface Match {
   matchId: string;
+  matchType: MatchType;
 
   // Raw player IDs (for permission checks and batch writes)
   team1Player1Id: string;

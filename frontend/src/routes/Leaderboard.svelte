@@ -1,25 +1,39 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { currentUser } from "../stores/auth";
   import { showSnackbar } from "../stores/snackbar";
   import { getLeaderboard } from "../lib/firestore/players";
   import LoadingSpinner from "../lib/components/LoadingSpinner.svelte";
-  import type { Player } from "../lib/firestore/types";
+  import type { MatchType, Player } from "../lib/firestore/types";
 
-  let players = $state<Player[]>([]);
-  let loading = $state(true);
+  type Tab = MatchType;
+
+  let activeTab  = $state<Tab>("male");
+  let players    = $state<Player[]>([]);
+  let loading    = $state(false);
 
   const uid = $derived($currentUser?.uid ?? "");
 
-  onMount(async () => {
+  const tabs: { key: Tab; label: string; icon: string }[] = [
+    { key: "male",   label: "Men's",   icon: "male"   },
+    { key: "female", label: "Women's", icon: "female" },
+    { key: "mixed",  label: "Mixed",   icon: "people" },
+  ];
+
+  async function loadTab(tab: Tab) {
+    activeTab = tab;
+    loading   = true;
+    players   = [];
     try {
-      players = await getLeaderboard();
+      players = await getLeaderboard(tab);
     } catch {
       showSnackbar("Failed to load leaderboard", "error");
     } finally {
       loading = false;
     }
-  });
+  }
+
+  // Load on mount
+  loadTab("male");
 
   function rankIcon(rank: number): string {
     if (rank === 1) return "🥇";
@@ -32,17 +46,47 @@
     return name[0]?.toUpperCase() ?? "?";
   }
 
+  function displayElo(p: Player): number {
+    return activeTab === "mixed" ? p.eloMixed : p.eloGender;
+  }
+
+  function displayWins(p: Player): number {
+    return activeTab === "mixed" ? p.winsMixed : p.winsGender;
+  }
+
+  function displayLosses(p: Player): number {
+    return activeTab === "mixed" ? p.lossesMixed : p.lossesGender;
+  }
+
   function winRate(p: Player): string {
-    if (p.gamesPlayed === 0) return "—";
-    return `${Math.round((p.wins / p.gamesPlayed) * 100)}%`;
+    const w = displayWins(p);
+    const l = displayLosses(p);
+    const total = w + l;
+    if (total === 0) return "—";
+    return `${Math.round((w / total) * 100)}%`;
   }
 </script>
 
 <div class="leaderboard">
-  <h1 class="headline-small" style="margin-bottom:var(--md-spacing-lg)">
+  <h1 class="headline-small" style="margin-bottom:var(--md-spacing-md)">
     <span class="material-icons" style="vertical-align:middle;color:var(--md-primary)">leaderboard</span>
     Rankings
   </h1>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    {#each tabs as tab}
+      <button
+        class="tab-btn"
+        class:active={activeTab === tab.key}
+        onclick={() => loadTab(tab.key)}
+        type="button"
+      >
+        <span class="material-icons tab-icon">{tab.icon}</span>
+        {tab.label}
+      </button>
+    {/each}
+  </div>
 
   {#if loading}
     <div style="display:flex;justify-content:center;padding:var(--md-spacing-2xl)">
@@ -92,12 +136,12 @@
                 </div>
               </td>
               <td class="col-elo">
-                <span class="elo-value">{player.elo}</span>
+                <span class="elo-value">{displayElo(player)}</span>
               </td>
               <td class="col-wl">
-                <span class="elo-positive">{player.wins}</span>
+                <span class="elo-positive">{displayWins(player)}</span>
                 <span style="color:var(--md-outline)"> / </span>
-                <span class="elo-negative">{player.losses}</span>
+                <span class="elo-negative">{displayLosses(player)}</span>
               </td>
               <td class="col-rate">{winRate(player)}</td>
             </tr>
@@ -113,6 +157,42 @@
 
 <style>
   .leaderboard { display: flex; flex-direction: column; gap: var(--md-spacing-md); }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--md-surface-variant);
+    border-radius: var(--md-radius-md);
+    padding: 4px;
+  }
+
+  .tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px var(--md-spacing-md);
+    border: none;
+    border-radius: var(--md-radius-sm);
+    background: transparent;
+    color: var(--md-on-surface-variant);
+    font-family: var(--md-font);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .tab-btn:hover { background: var(--md-outline-variant); }
+
+  .tab-btn.active {
+    background: var(--md-surface);
+    color: var(--md-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
+  }
+
+  .tab-icon { font-size: 18px; }
 
   .table-card { overflow-x: auto; }
 

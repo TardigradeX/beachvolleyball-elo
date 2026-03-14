@@ -21,8 +21,16 @@
       "collectionGroup": "players",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "displayNameLower", "order": "ASCENDING" },
-        { "fieldPath": "elo",              "order": "DESCENDING" }
+        { "fieldPath": "gender",           "order": "ASCENDING" },
+        { "fieldPath": "eloGender",        "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "players",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "gender",           "order": "ASCENDING" },
+        { "fieldPath": "displayNameLower", "order": "ASCENDING" }
       ]
     }
   ],

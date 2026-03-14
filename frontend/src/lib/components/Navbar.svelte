@@ -7,8 +7,8 @@
   let menuOpen = $state(false);
 
   const navLinks = [
-    { href: "#/", label: "Dashboard", icon: "dashboard" },
-    { href: "#/leaderboard", label: "Leaderboard", icon: "leaderboard" },
+    { href: "#/", label: "MyBeach", icon: "dashboard" },
+    { href: "#/leaderboard", label: "Rankings", icon: "leaderboard" },
   ];
 
   function navigate(href: string) {

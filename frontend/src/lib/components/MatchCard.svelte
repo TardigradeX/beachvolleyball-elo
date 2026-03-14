@@ -14,7 +14,7 @@
     status: string;
     creatorId: string;
     reportedWinner: string | null;
-    createdAt: string;
+    createdAt: { toDate(): Date } | null;
     team1Player1: Player;
     team1Player2: Player;
     team2Player1: Player;
@@ -63,7 +63,7 @@
         <EloChange delta={myDelta} />
       {/if}
       <span class="date body-small" style="color:var(--md-on-surface-variant)">
-        {new Date(match.createdAt).toLocaleDateString()}
+        {match.createdAt?.toDate().toLocaleDateString() ?? "—"}
       </span>
     </div>
   </div>

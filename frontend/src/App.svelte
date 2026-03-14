@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { authLoading, currentUser } from "./stores/auth";
+  import { authLoading, currentUser, currentPlayer, needsGenderSetup } from "./stores/auth";
   import LoadingSpinner from "./lib/components/LoadingSpinner.svelte";
   import SnackBar from "./lib/components/SnackBar.svelte";
   import Navbar from "./lib/components/Navbar.svelte";
   import Login from "./routes/Login.svelte";
+  import GenderSetup from "./routes/GenderSetup.svelte";
   import Dashboard from "./routes/Dashboard.svelte";
   import CreateMatch from "./routes/CreateMatch.svelte";
   import MatchDetail from "./routes/MatchDetail.svelte";
@@ -34,6 +35,11 @@
   <LoadingSpinner fullscreen />
 {:else if !$currentUser}
   <Login />
+{:else if $currentPlayer === null}
+  <!-- Player doc not yet loaded from Firestore — avoid flashing wrong screen -->
+  <LoadingSpinner fullscreen />
+{:else if $needsGenderSetup}
+  <GenderSetup />
 {:else}
   <Navbar />
   <main class="content">

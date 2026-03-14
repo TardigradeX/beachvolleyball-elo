@@ -10,24 +10,29 @@ import {
   writeBatch,
   updateDoc,
   serverTimestamp,
-  Timestamp,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { getPlayers } from "./players";
 import { calculateMatchElo, type EloInputPlayer } from "../utils/elo";
-import type { Match, Player, PlayerSnapshot, TeamLabel } from "./types";
+import type { Match, MatchType, Player, PlayerSnapshot, TeamLabel } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function toSnapshot(p: Player): PlayerSnapshot {
-  return { id: p.uid, displayName: p.displayName, photoUrl: p.photoUrl, elo: p.elo };
+function toSnapshot(p: Player, matchType: MatchType): PlayerSnapshot {
+  return {
+    id:          p.uid,
+    displayName: p.displayName,
+    photoUrl:    p.photoUrl,
+    gender:      p.gender,
+    elo:         matchType === "mixed" ? p.eloMixed : p.eloGender,
+  };
 }
 
-function toEloInput(p: Player): EloInputPlayer {
+function toEloInput(p: Player, matchType: MatchType): EloInputPlayer {
   return {
     uid:         p.uid,
-    currentElo:  p.elo,
+    currentElo:  matchType === "mixed" ? p.eloMixed : p.eloGender,
     gamesPlayed: p.gamesPlayed,
     wins:        p.wins,
     losses:      p.losses,
@@ -42,24 +47,26 @@ export interface CreateMatchParams {
   team2Player1: Player;
   team2Player2: Player;
   creatorPlayer: Player;
+  matchType: MatchType;
 }
 
 /**
  * Creates a new match document. The creator is always team1Player1.
- * All 4 players' current ELOs are snapshotted into the document.
+ * All 4 players' current ELOs (for the given matchType) are snapshotted.
  * Returns the new match ID.
  */
 export async function createMatch(params: CreateMatchParams): Promise<string> {
-  const { creatorUid, team1Partner, team2Player1, team2Player2, creatorPlayer } = params;
+  const { creatorUid, team1Partner, team2Player1, team2Player2, creatorPlayer, matchType } = params;
 
-  const matchId = crypto.randomUUID();
+  const matchId  = crypto.randomUUID();
   const matchRef = doc(db, "matches", matchId);
 
+  const relevantElo = (p: Player) => matchType === "mixed" ? p.eloMixed : p.eloGender;
+
   await writeBatch(db)
-    // We use a batch even for create so it's easy to extend later.
-    // setDoc inside a batch is fine.
     .set(matchRef, {
       matchId,
+      matchType,
       creatorId:             creatorUid,
       team1Player1Id:        creatorUid,
       team1Player2Id:        team1Partner.uid,
@@ -72,21 +79,21 @@ export async function createMatch(params: CreateMatchParams): Promise<string> {
       createdAt:             serverTimestamp(),
       reportedAt:            null,
       verifiedAt:            null,
-      // ELO snapshots at creation
-      team1Player1EloBefore: creatorPlayer.elo,
-      team1Player2EloBefore: team1Partner.elo,
-      team2Player1EloBefore: team2Player1.elo,
-      team2Player2EloBefore: team2Player2.elo,
+      // ELO snapshots at creation (relevant to match type)
+      team1Player1EloBefore: relevantElo(creatorPlayer),
+      team1Player2EloBefore: relevantElo(team1Partner),
+      team2Player1EloBefore: relevantElo(team2Player1),
+      team2Player2EloBefore: relevantElo(team2Player2),
       // Deltas null until verified
       team1Player1EloDelta:  null,
       team1Player2EloDelta:  null,
       team2Player1EloDelta:  null,
       team2Player2EloDelta:  null,
       // Denormalized player snapshots for rendering match cards without extra reads
-      team1Player1: toSnapshot(creatorPlayer),
-      team1Player2: toSnapshot(team1Partner),
-      team2Player1: toSnapshot(team2Player1),
-      team2Player2: toSnapshot(team2Player2),
+      team1Player1: toSnapshot(creatorPlayer, matchType),
+      team1Player2: toSnapshot(team1Partner,  matchType),
+      team2Player1: toSnapshot(team2Player1,  matchType),
+      team2Player2: toSnapshot(team2Player2,  matchType),
     })
     .commit();
 
@@ -112,21 +119,15 @@ export async function reportResult(
 
 /**
  * A team2 player verifies the result.
- * Calculates ELO for all 4 players and commits everything atomically:
- *   - Match: status → completed, deltas written
- *   - All 4 player docs: elo / gamesPlayed / wins / losses updated
+ * Updates eloGender or eloMixed depending on the match type, atomically.
  *
  * The player updates include `_verifyingMatchId` so the Firestore Security
  * Rule can validate this is a legitimate cross-document batch write.
- *
- * @returns ELO results for all 4 players (for display in the UI)
  */
 export async function verifyResult(
   match: Match,
   verifierUid: string
 ): Promise<ReturnType<typeof calculateMatchElo>> {
-  // Fetch the current (live) ELOs — not the snapshots — so we calculate
-  // from up-to-date values.
   const playerIds = [
     match.team1Player1Id,
     match.team1Player2Id,
@@ -141,8 +142,8 @@ export async function verifyResult(
   const pm = Object.fromEntries(players.map((p) => [p.uid, p]));
 
   const results = calculateMatchElo(
-    [toEloInput(pm[match.team1Player1Id]), toEloInput(pm[match.team1Player2Id])],
-    [toEloInput(pm[match.team2Player1Id]), toEloInput(pm[match.team2Player2Id])],
+    [toEloInput(pm[match.team1Player1Id], match.matchType), toEloInput(pm[match.team1Player2Id], match.matchType)],
+    [toEloInput(pm[match.team2Player1Id], match.matchType), toEloInput(pm[match.team2Player2Id], match.matchType)],
     match.reportedWinner === "team1"
   );
 
@@ -150,7 +151,7 @@ export async function verifyResult(
 
   const batch = writeBatch(db);
 
-  // 1. Update match: set status to completed + write ELO deltas
+  // 1. Update match
   batch.update(doc(db, "matches", match.matchId), {
     status:               "completed",
     verifiedBy:           verifierUid,
@@ -161,11 +162,19 @@ export async function verifyResult(
     team2Player2EloDelta: rm[match.team2Player2Id].delta,
   });
 
-  // 2. Update all 4 players. `_verifyingMatchId` is read by the Security Rule
-  //    to confirm this batch is part of a legitimate pending_verification match.
+  // 2. Update all 4 players — write to the correct ELO and category stat fields
+  const isMixed    = match.matchType === "mixed";
+  const eloField   = isMixed ? "eloMixed"    : "eloGender";
+  const winsField  = isMixed ? "winsMixed"   : "winsGender";
+  const lossField  = isMixed ? "lossesMixed" : "lossesGender";
+
   for (const r of results) {
+    const p   = pm[r.uid];
+    const won = r.wins > p.wins;
     batch.update(doc(db, "players", r.uid), {
-      elo:               r.newElo,
+      [eloField]:        r.newElo,
+      [winsField]:       p[winsField]  + (won ? 1 : 0),
+      [lossField]:       p[lossField]  + (won ? 0 : 1),
       gamesPlayed:       r.gamesPlayed,
       wins:              r.wins,
       losses:            r.losses,
@@ -196,10 +205,6 @@ export async function getMatch(matchId: string): Promise<Match | null> {
 
 // ── Real-time listeners ───────────────────────────────────────────────────────
 
-/**
- * Subscribe to real-time updates for all matches involving the given player.
- * Returns an unsubscribe function. Ordered newest-first.
- */
 export function onMyMatchesSnapshot(
   uid: string,
   callback: (matches: Match[]) => void
@@ -210,17 +215,11 @@ export function onMyMatchesSnapshot(
     orderBy("createdAt", "desc"),
     limit(50)
   );
-
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => d.data() as Match));
   });
 }
 
-/**
- * Subscribe to real-time updates for a single match document.
- * Used on the MatchDetail page so the creator sees live updates
- * when an opponent verifies.
- */
 export function onMatchSnapshot(
   matchId: string,
   callback: (match: Match | null) => void
