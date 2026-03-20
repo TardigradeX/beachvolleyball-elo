@@ -240,6 +240,19 @@ export function onMyMatchesSnapshot(
   });
 }
 
+export function onAllMatchesSnapshot(
+  callback: (matches: Match[]) => void
+): Unsubscribe {
+  const q = query(
+    collection(db, "matches"),
+    orderBy("createdAt", "desc"),
+    limit(50)
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => d.data() as Match));
+  });
+}
+
 export function onMatchSnapshot(
   matchId: string,
   callback: (match: Match | null) => void

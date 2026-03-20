@@ -40,12 +40,14 @@
     match?.team2Player1Id === uid || match?.team2Player2Id === uid
   );
 
-  const isDisputer = $derived(match?.disputedBy === uid);
+  const isTeam1   = $derived(
+    match?.team1Player1Id === uid || match?.team1Player2Id === uid
+  );
 
   const canReport  = $derived(isCreator && match?.status === "pending_result");
   const canVerify  = $derived(isTeam2   && match?.status === "pending_verification");
-  const canDelete  = $derived(isCreator && match?.status === "disputed");
-  const canAccept  = $derived(isDisputer && match?.status === "disputed");
+  const canDelete  = $derived(isTeam1   && match?.status === "disputed");
+  const canAccept  = $derived(isTeam2   && match?.status === "disputed");
 
   async function handleReport(winner: "team1" | "team2") {
     if (!matchId) return;

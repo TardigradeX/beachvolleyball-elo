@@ -145,10 +145,11 @@ service cloud.firestore {
       allow update: if isAuthed()
         && (isReportTransition() || isVerifyTransition() || isDisputeTransition() || isAcceptDisputeTransition());
 
-      // Creator can delete a disputed match.
+      // Team 1 (creator's team) can delete a disputed match.
       allow delete: if isAuthed()
         && resource.data.status == 'disputed'
-        && request.auth.uid == resource.data.creatorId;
+        && (request.auth.uid == resource.data.team1Player1Id
+            || request.auth.uid == resource.data.team1Player2Id);
     }
 
     // pending_result → pending_verification (creator reports result)
@@ -222,7 +223,7 @@ service cloud.firestore {
       let uid    = request.auth.uid;
       return before.status == 'disputed'
           && after.status  == 'pending_verification'
-          && uid == before.disputedBy
+          && (uid == before.team2Player1Id || uid == before.team2Player2Id)
           && after.disputedBy           == null
           && after.verifiedBy           == null
           && after.team1Player1EloDelta == null

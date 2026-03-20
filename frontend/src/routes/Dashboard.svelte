@@ -3,20 +3,22 @@
   import { currentUser } from "../stores/auth";
   import { showSnackbar } from "../stores/snackbar";
   import { onPlayerSnapshot } from "../lib/firestore/players";
-  import { onMyMatchesSnapshot } from "../lib/firestore/matches";
+  import { onMyMatchesSnapshot, onAllMatchesSnapshot } from "../lib/firestore/matches";
   import MatchCard from "../lib/components/MatchCard.svelte";
   import LoadingSpinner from "../lib/components/LoadingSpinner.svelte";
   import type { Player } from "../lib/firestore/types";
   import type { Match } from "../lib/firestore/types";
 
-  let profile    = $state<Player | null>(null);
-  let matches    = $state<Match[]>([]);
-  let loading    = $state(true);
+  let profile      = $state<Player | null>(null);
+  let myMatches    = $state<Match[]>([]);
+  let allMatches   = $state<Match[]>([]);
+  let loading      = $state(true);
 
   const uid = $derived($currentUser?.uid ?? "");
 
-  let unsubMatches: (() => void) | undefined;
-  let unsubProfile: (() => void) | undefined;
+  let unsubMyMatches:  (() => void) | undefined;
+  let unsubAllMatches: (() => void) | undefined;
+  let unsubProfile:    (() => void) | undefined;
 
   onMount(() => {
     if (!uid) return;
@@ -26,19 +28,24 @@
       loading = false;
     });
 
-    unsubMatches = onMyMatchesSnapshot(uid, (m) => {
-      matches = m;
+    unsubMyMatches = onMyMatchesSnapshot(uid, (m) => {
+      myMatches = m;
+    });
+
+    unsubAllMatches = onAllMatchesSnapshot((m) => {
+      allMatches = m;
     });
   });
 
   onDestroy(() => {
-    unsubMatches?.();
+    unsubMyMatches?.();
+    unsubAllMatches?.();
     unsubProfile?.();
   });
 
   // Matches where I need to take action (team2, pending verification)
   const pendingVerification = $derived(
-    matches.filter(
+    myMatches.filter(
       (m) =>
         m.status === "pending_verification" &&
         (m.team2Player1Id === uid || m.team2Player2Id === uid)
@@ -47,25 +54,25 @@
 
   // Matches where I'm waiting for opponent to verify
   const awaitingOpponent = $derived(
-    matches.filter(
+    myMatches.filter(
       (m) => m.status === "pending_verification" && m.creatorId === uid
     )
   );
 
   // Matches I created that haven't been reported yet
   const pendingResult = $derived(
-    matches.filter((m) => m.status === "pending_result" && m.creatorId === uid)
+    myMatches.filter((m) => m.status === "pending_result" && m.creatorId === uid)
   );
 
   const recentCompleted = $derived(
-    matches.filter((m) => m.status === "completed").slice(0, 5)
+    myMatches.filter((m) => m.status === "completed").slice(0, 5)
   );
 
   const disputedMatches = $derived(
-    matches.filter((m) => m.status === "disputed")
+    myMatches.filter((m) => m.status === "disputed")
   );
 
-  let activeTab = $state<"matches" | "disputed">("matches");
+  let activeTab = $state<"my" | "all" | "disputed">("my");
 
   function navigate(path: string) {
     window.location.hash = path;
@@ -123,27 +130,28 @@
   </div>
 
   <!-- Tab switcher -->
-  <div class="tab-group">
-    <button
-      class="tab-btn"
-      class:active={activeTab === "matches"}
-      onclick={() => activeTab = "matches"}
-    >
-      Matches
-    </button>
-    <button
-      class="tab-btn"
-      class:active={activeTab === "disputed"}
-      onclick={() => activeTab = "disputed"}
-    >
-      Disputed
-      {#if disputedMatches.length > 0}
-        <span class="tab-badge">{disputedMatches.length}</span>
-      {/if}
-    </button>
+  <div class="tabs">
+    {#each [
+      { key: "my",       label: "My Matches",  icon: "person" },
+      { key: "all",      label: "All Matches",  icon: "public" },
+      { key: "disputed", label: "Disputed",     icon: "gavel" },
+    ] as tab (tab.key)}
+      <button
+        class="tab-btn"
+        class:active={activeTab === tab.key}
+        onclick={() => activeTab = tab.key}
+        type="button"
+      >
+        <span class="material-icons tab-icon">{tab.icon}</span>
+        {tab.label}
+        {#if tab.key === "disputed" && disputedMatches.length > 0}
+          <span class="tab-badge">{disputedMatches.length}</span>
+        {/if}
+      </button>
+    {/each}
   </div>
 
-  {#if activeTab === "matches"}
+  {#if activeTab === "my"}
   <!-- Action needed: needs your verification -->
   {#if pendingVerification.length > 0}
     <section class="section">
@@ -223,6 +231,33 @@
     {:else}
       <div class="match-list">
         {#each recentCompleted as match (match.matchId)}
+          <MatchCard
+            {match}
+            currentUserId={uid}
+            onclick={() => navigate(`/match/${match.matchId}`)}
+          />
+        {/each}
+      </div>
+    {/if}
+  </section>
+  {:else if activeTab === "all"}
+  <!-- All matches tab content -->
+  <section class="section">
+    <h2 class="title-medium section-title">
+      <span class="material-icons" style="color:var(--md-primary)">public</span>
+      All matches
+    </h2>
+    {#if allMatches.length === 0 && !loading}
+      <div class="empty-state md-card">
+        <span class="material-icons empty-icon" style="font-size:48px">sports_volleyball</span>
+        <p class="title-medium">No matches yet</p>
+        <p class="body-medium" style="color:var(--md-on-surface-variant)">
+          No matches have been played yet.
+        </p>
+      </div>
+    {:else}
+      <div class="match-list">
+        {#each allMatches as match (match.matchId)}
           <MatchCard
             {match}
             currentUserId={uid}
@@ -352,12 +387,12 @@
 
   .empty-icon { font-size: 64px; color: var(--md-outline); margin-bottom: var(--md-spacing-sm); }
 
-  .tab-group {
+  .tabs {
     display: flex;
-    background: var(--md-surface-container);
-    border-radius: var(--md-radius-full);
-    padding: 4px;
     gap: 4px;
+    background: var(--md-surface-variant);
+    border-radius: var(--md-radius-md);
+    padding: 4px;
   }
 
   .tab-btn {
@@ -366,21 +401,27 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 8px 16px;
+    padding: 8px var(--md-spacing-md);
     border: none;
-    border-radius: var(--md-radius-full);
+    border-radius: var(--md-radius-sm);
     background: transparent;
     color: var(--md-on-surface-variant);
+    font-family: var(--md-font);
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
-    transition: background 0.2s, color 0.2s;
+    transition: background 0.15s, color 0.15s;
   }
 
+  .tab-btn:hover { background: var(--md-outline-variant); }
+
   .tab-btn.active {
-    background: var(--md-primary);
-    color: var(--md-on-primary);
+    background: var(--md-surface);
+    color: var(--md-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
   }
+
+  .tab-icon { font-size: 18px; }
 
   .tab-badge {
     display: inline-flex;
@@ -394,10 +435,5 @@
     color: var(--md-on-error, #fff);
     font-size: 0.75rem;
     font-weight: 600;
-  }
-
-  .tab-btn.active .tab-badge {
-    background: var(--md-on-primary);
-    color: var(--md-primary);
   }
 </style>
