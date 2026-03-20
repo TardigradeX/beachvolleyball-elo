@@ -9,6 +9,7 @@
   import CreateMatch from "./routes/CreateMatch.svelte";
   import MatchDetail from "./routes/MatchDetail.svelte";
   import Leaderboard from "./routes/Leaderboard.svelte";
+  import CookieBanner from "./lib/components/CookieBanner.svelte";
 
   // Simple hash-based router — no external dependency needed
   let hash = $state(window.location.hash || "#/");
@@ -30,6 +31,7 @@
 </script>
 
 <SnackBar />
+<CookieBanner />
 
 {#if $authLoading}
   <LoadingSpinner fullscreen />
