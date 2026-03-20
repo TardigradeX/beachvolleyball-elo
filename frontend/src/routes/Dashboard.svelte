@@ -64,8 +64,8 @@
     myMatches.filter((m) => m.status === "pending_result" && m.creatorId === uid)
   );
 
-  const recentCompleted = $derived(
-    myMatches.filter((m) => m.status === "completed").slice(0, 5)
+  const completedMatches = $derived(
+    myMatches.filter((m) => m.status === "completed")
   );
 
   const disputedMatches = $derived(
@@ -73,6 +73,11 @@
   );
 
   let activeTab = $state<"my" | "all" | "disputed">("my");
+
+  const PAGE_SIZE = 10;
+  let myVisible       = $state(PAGE_SIZE);
+  let allVisible      = $state(PAGE_SIZE);
+  let disputedVisible = $state(PAGE_SIZE);
 
   function navigate(path: string) {
     window.location.hash = path;
@@ -209,14 +214,9 @@
     </section>
   {/if}
 
-  <!-- Recent completed -->
+  <!-- Completed matches -->
   <section class="section">
-    <h2 class="title-medium section-title">
-      <span class="material-icons" style="color:var(--md-success)">history</span>
-      Recent matches
-    </h2>
-
-    {#if recentCompleted.length === 0 && !loading}
+    {#if completedMatches.length === 0 && !loading}
       <div class="empty-state md-card">
         <span class="material-icons empty-icon">sports_volleyball</span>
         <p class="title-medium">No matches yet</p>
@@ -230,7 +230,7 @@
       </div>
     {:else}
       <div class="match-list">
-        {#each recentCompleted as match (match.matchId)}
+        {#each completedMatches.slice(0, myVisible) as match (match.matchId)}
           <MatchCard
             {match}
             currentUserId={uid}
@@ -238,15 +238,17 @@
           />
         {/each}
       </div>
+      {#if completedMatches.length > myVisible}
+        <button class="md-btn-outlined load-more-btn" onclick={() => myVisible += PAGE_SIZE}>
+          <span class="material-icons">expand_more</span>
+          Older matches
+        </button>
+      {/if}
     {/if}
   </section>
   {:else if activeTab === "all"}
   <!-- All matches tab content -->
   <section class="section">
-    <h2 class="title-medium section-title">
-      <span class="material-icons" style="color:var(--md-primary)">public</span>
-      All matches
-    </h2>
     {#if allMatches.length === 0 && !loading}
       <div class="empty-state md-card">
         <span class="material-icons empty-icon" style="font-size:48px">sports_volleyball</span>
@@ -257,7 +259,7 @@
       </div>
     {:else}
       <div class="match-list">
-        {#each allMatches as match (match.matchId)}
+        {#each allMatches.slice(0, allVisible) as match (match.matchId)}
           <MatchCard
             {match}
             currentUserId={uid}
@@ -265,15 +267,17 @@
           />
         {/each}
       </div>
+      {#if allMatches.length > allVisible}
+        <button class="md-btn-outlined load-more-btn" onclick={() => allVisible += PAGE_SIZE}>
+          <span class="material-icons">expand_more</span>
+          Older matches
+        </button>
+      {/if}
     {/if}
   </section>
   {:else}
   <!-- Disputed tab content -->
   <section class="section">
-    <h2 class="title-medium section-title">
-      <span class="material-icons" style="color:var(--md-error)">gavel</span>
-      Disputed matches
-    </h2>
     {#if disputedMatches.length === 0}
       <div class="empty-state md-card">
         <span class="material-icons empty-icon" style="font-size:48px">check_circle</span>
@@ -284,7 +288,7 @@
       </div>
     {:else}
       <div class="match-list">
-        {#each disputedMatches as match (match.matchId)}
+        {#each disputedMatches.slice(0, disputedVisible) as match (match.matchId)}
           <MatchCard
             {match}
             currentUserId={uid}
@@ -292,6 +296,12 @@
           />
         {/each}
       </div>
+      {#if disputedMatches.length > disputedVisible}
+        <button class="md-btn-outlined load-more-btn" onclick={() => disputedVisible += PAGE_SIZE}>
+          <span class="material-icons">expand_more</span>
+          Older matches
+        </button>
+      {/if}
     {/if}
   </section>
   {/if}
@@ -375,6 +385,11 @@
   }
 
   .match-list { display: flex; flex-direction: column; gap: var(--md-spacing-sm); }
+
+  .load-more-btn {
+    align-self: center;
+    gap: 4px;
+  }
 
   .empty-state {
     display: flex;

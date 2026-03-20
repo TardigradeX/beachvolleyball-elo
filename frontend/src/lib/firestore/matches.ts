@@ -233,7 +233,7 @@ export function onMyMatchesSnapshot(
     collection(db, "matches"),
     where("playerIds", "array-contains", uid),
     orderBy("createdAt", "desc"),
-    limit(50)
+    limit(200)
   );
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => d.data() as Match));
@@ -246,7 +246,7 @@ export function onAllMatchesSnapshot(
   const q = query(
     collection(db, "matches"),
     orderBy("createdAt", "desc"),
-    limit(50)
+    limit(200)
   );
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => d.data() as Match));
