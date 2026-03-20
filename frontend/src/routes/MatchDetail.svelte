@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { currentUser } from "../stores/auth";
   import { showSnackbar } from "../stores/snackbar";
-  import { onMatchSnapshot, reportResult, verifyResult, disputeResult } from "../lib/firestore/matches";
+  import { onMatchSnapshot, reportResult, verifyResult, disputeResult, acceptDispute, deleteMatch } from "../lib/firestore/matches";
   import PlayerChip from "../lib/components/PlayerChip.svelte";
   import EloChange from "../lib/components/EloChange.svelte";
   import LoadingSpinner from "../lib/components/LoadingSpinner.svelte";
@@ -40,8 +40,12 @@
     match?.team2Player1Id === uid || match?.team2Player2Id === uid
   );
 
-  const canReport = $derived(isCreator && match?.status === "pending_result");
-  const canVerify = $derived(isTeam2   && match?.status === "pending_verification");
+  const isDisputer = $derived(match?.disputedBy === uid);
+
+  const canReport  = $derived(isCreator && match?.status === "pending_result");
+  const canVerify  = $derived(isTeam2   && match?.status === "pending_verification");
+  const canDelete  = $derived(isCreator && match?.status === "disputed");
+  const canAccept  = $derived(isDisputer && match?.status === "disputed");
 
   async function handleReport(winner: "team1" | "team2") {
     if (!matchId) return;
@@ -77,10 +81,37 @@
     if (!matchId) return;
     actionLoading = true;
     try {
-      await disputeResult(matchId);
+      await disputeResult(matchId, uid);
       showSnackbar("Result disputed", "info");
     } catch (err: unknown) {
       showSnackbar(err instanceof Error ? err.message : "Failed to dispute result", "error");
+    } finally {
+      actionLoading = false;
+    }
+  }
+
+  async function handleAcceptDispute() {
+    if (!matchId) return;
+    actionLoading = true;
+    try {
+      await acceptDispute(matchId);
+      showSnackbar("Dispute withdrawn — match returned to verification", "success");
+    } catch (err: unknown) {
+      showSnackbar(err instanceof Error ? err.message : "Failed to accept result", "error");
+    } finally {
+      actionLoading = false;
+    }
+  }
+
+  async function handleDeleteMatch() {
+    if (!matchId) return;
+    actionLoading = true;
+    try {
+      await deleteMatch(matchId);
+      showSnackbar("Match deleted", "info");
+      window.location.hash = "/";
+    } catch (err: unknown) {
+      showSnackbar(err instanceof Error ? err.message : "Failed to delete match", "error");
     } finally {
       actionLoading = false;
     }
@@ -137,7 +168,13 @@
         {/if}
       {:else if match.status === "disputed"}
         <span class="material-icons">gavel</span>
-        <span>Result disputed — contact an admin to resolve</span>
+        {#if canAccept}
+          <span>You disputed this result — accept it or wait for the creator to delete</span>
+        {:else if canDelete}
+          <span>Result disputed — you can delete this match</span>
+        {:else}
+          <span>Result disputed — waiting for resolution</span>
+        {/if}
       {/if}
     </div>
 
@@ -272,6 +309,47 @@
           >
             {#if actionLoading}<LoadingSpinner size="sm" />{:else}<span class="material-icons">flag</span>{/if}
             Dispute result
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Action: disputer accepts result (withdraws dispute) -->
+    {#if canAccept}
+      <div class="action-card md-card">
+        <div class="title-medium" style="margin-bottom:4px">Resolve dispute</div>
+        <p class="body-medium" style="color:var(--md-on-surface-variant);margin-bottom:var(--md-spacing-md)">
+          You disputed this result. Accept it to return the match to verification, or wait for the creator to delete it.
+        </p>
+        <div class="action-buttons">
+          <button
+            class="md-btn-filled result-btn"
+            onclick={handleAcceptDispute}
+            disabled={actionLoading}
+          >
+            {#if actionLoading}<LoadingSpinner size="sm" />{:else}<span class="material-icons">check</span>{/if}
+            Accept result
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Action: creator deletes disputed match -->
+    {#if canDelete}
+      <div class="action-card md-card">
+        <div class="title-medium" style="margin-bottom:4px">Delete match</div>
+        <p class="body-medium" style="color:var(--md-on-surface-variant);margin-bottom:var(--md-spacing-md)">
+          This match was disputed. You can delete it since no ELO was applied.
+        </p>
+        <div class="action-buttons">
+          <button
+            class="md-btn-outlined result-btn"
+            onclick={handleDeleteMatch}
+            disabled={actionLoading}
+            style="border-color:var(--md-error);color:var(--md-error)"
+          >
+            {#if actionLoading}<LoadingSpinner size="sm" />{:else}<span class="material-icons">delete</span>{/if}
+            Delete match
           </button>
         </div>
       </div>

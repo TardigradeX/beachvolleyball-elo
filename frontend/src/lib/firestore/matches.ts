@@ -1,6 +1,7 @@
 import {
   doc,
   getDoc,
+  deleteDoc,
   collection,
   query,
   where,
@@ -76,6 +77,7 @@ export async function createMatch(params: CreateMatchParams): Promise<string> {
       status:                "pending_result",
       reportedWinner:        null,
       verifiedBy:            null,
+      disputedBy:            null,
       createdAt:             serverTimestamp(),
       reportedAt:            null,
       verifiedAt:            null,
@@ -190,10 +192,28 @@ export async function verifyResult(
  * A team2 player disputes the reported result.
  * Moves status: pending_verification → disputed.
  */
-export async function disputeResult(matchId: string): Promise<void> {
+export async function disputeResult(matchId: string, uid: string): Promise<void> {
   await updateDoc(doc(db, "matches", matchId), {
     status: "disputed",
+    disputedBy: uid,
   });
+}
+
+/**
+ * The disputer withdraws their dispute, returning the match to pending_verification.
+ */
+export async function acceptDispute(matchId: string): Promise<void> {
+  await updateDoc(doc(db, "matches", matchId), {
+    status: "pending_verification",
+    disputedBy: null,
+  });
+}
+
+/**
+ * The match creator deletes a disputed match entirely.
+ */
+export async function deleteMatch(matchId: string): Promise<void> {
+  await deleteDoc(doc(db, "matches", matchId));
 }
 
 // ── Reads ────────────────────────────────────────────────────────────────────

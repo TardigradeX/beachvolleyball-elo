@@ -114,6 +114,7 @@ service cloud.firestore {
         && request.resource.data.status == 'pending_result'
         && request.resource.data.reportedWinner == null
         && request.resource.data.verifiedBy == null
+        && request.resource.data.disputedBy == null
         // All 4 ELO deltas must be null on creation
         && request.resource.data.team1Player1EloDelta == null
         && request.resource.data.team1Player2EloDelta == null
@@ -142,10 +143,12 @@ service cloud.firestore {
 
       // State machine transitions — each branch enforces exactly one valid move.
       allow update: if isAuthed()
-        && (isReportTransition() || isVerifyTransition() || isDisputeTransition());
+        && (isReportTransition() || isVerifyTransition() || isDisputeTransition() || isAcceptDisputeTransition());
 
-      // Matches are never deleted.
-      allow delete: if false;
+      // Creator can delete a disputed match.
+      allow delete: if isAuthed()
+        && resource.data.status == 'disputed'
+        && request.auth.uid == resource.data.creatorId;
     }
 
     // pending_result → pending_verification (creator reports result)
@@ -200,8 +203,30 @@ service cloud.firestore {
       return before.status == 'pending_verification'
           && after.status  == 'disputed'
           && (uid == before.team2Player1Id || uid == before.team2Player2Id)
-          && after.verifiedBy          == null
+          && after.disputedBy           == uid
+          && after.verifiedBy           == null
           && after.team1Player1EloDelta == null
+          // Immutable core fields
+          && after.creatorId      == before.creatorId
+          && after.team1Player1Id == before.team1Player1Id
+          && after.team1Player2Id == before.team1Player2Id
+          && after.team2Player1Id == before.team2Player1Id
+          && after.team2Player2Id == before.team2Player2Id
+          && after.playerIds      == before.playerIds;
+    }
+
+    // disputed → pending_verification (disputer withdraws dispute)
+    function isAcceptDisputeTransition() {
+      let before = resource.data;
+      let after  = request.resource.data;
+      let uid    = request.auth.uid;
+      return before.status == 'disputed'
+          && after.status  == 'pending_verification'
+          && uid == before.disputedBy
+          && after.disputedBy           == null
+          && after.verifiedBy           == null
+          && after.team1Player1EloDelta == null
+          && after.reportedWinner       == before.reportedWinner
           // Immutable core fields
           && after.creatorId      == before.creatorId
           && after.team1Player1Id == before.team1Player1Id

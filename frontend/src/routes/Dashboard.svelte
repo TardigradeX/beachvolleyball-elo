@@ -61,6 +61,12 @@
     matches.filter((m) => m.status === "completed").slice(0, 5)
   );
 
+  const disputedMatches = $derived(
+    matches.filter((m) => m.status === "disputed")
+  );
+
+  let activeTab = $state<"matches" | "disputed">("matches");
+
   function navigate(path: string) {
     window.location.hash = path;
   }
@@ -116,6 +122,28 @@
 
   </div>
 
+  <!-- Tab switcher -->
+  <div class="tab-group">
+    <button
+      class="tab-btn"
+      class:active={activeTab === "matches"}
+      onclick={() => activeTab = "matches"}
+    >
+      Matches
+    </button>
+    <button
+      class="tab-btn"
+      class:active={activeTab === "disputed"}
+      onclick={() => activeTab = "disputed"}
+    >
+      Disputed
+      {#if disputedMatches.length > 0}
+        <span class="tab-badge">{disputedMatches.length}</span>
+      {/if}
+    </button>
+  </div>
+
+  {#if activeTab === "matches"}
   <!-- Action needed: needs your verification -->
   {#if pendingVerification.length > 0}
     <section class="section">
@@ -204,6 +232,34 @@
       </div>
     {/if}
   </section>
+  {:else}
+  <!-- Disputed tab content -->
+  <section class="section">
+    <h2 class="title-medium section-title">
+      <span class="material-icons" style="color:var(--md-error)">gavel</span>
+      Disputed matches
+    </h2>
+    {#if disputedMatches.length === 0}
+      <div class="empty-state md-card">
+        <span class="material-icons empty-icon" style="font-size:48px">check_circle</span>
+        <p class="title-medium">No disputed matches</p>
+        <p class="body-medium" style="color:var(--md-on-surface-variant)">
+          All clear — no disputes to resolve.
+        </p>
+      </div>
+    {:else}
+      <div class="match-list">
+        {#each disputedMatches as match (match.matchId)}
+          <MatchCard
+            {match}
+            currentUserId={uid}
+            onclick={() => navigate(`/match/${match.matchId}`)}
+          />
+        {/each}
+      </div>
+    {/if}
+  </section>
+  {/if}
 </div>
 
 <button class="md-fab" onclick={() => navigate("/create")} aria-label="Create match">
@@ -295,4 +351,53 @@
   }
 
   .empty-icon { font-size: 64px; color: var(--md-outline); margin-bottom: var(--md-spacing-sm); }
+
+  .tab-group {
+    display: flex;
+    background: var(--md-surface-container);
+    border-radius: var(--md-radius-full);
+    padding: 4px;
+    gap: 4px;
+  }
+
+  .tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--md-radius-full);
+    background: transparent;
+    color: var(--md-on-surface-variant);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+
+  .tab-btn.active {
+    background: var(--md-primary);
+    color: var(--md-on-primary);
+  }
+
+  .tab-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--md-radius-full);
+    background: var(--md-error);
+    color: var(--md-on-error, #fff);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .tab-btn.active .tab-badge {
+    background: var(--md-on-primary);
+    color: var(--md-primary);
+  }
 </style>

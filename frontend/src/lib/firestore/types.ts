@@ -68,6 +68,7 @@ export interface Match {
   status: MatchStatus;
   reportedWinner: TeamLabel | null;
   verifiedBy: string | null;
+  disputedBy: string | null;
 
   createdAt: Timestamp;
   reportedAt: Timestamp | null;
