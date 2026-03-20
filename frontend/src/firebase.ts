@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import { getAuth, GoogleAuthProvider, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
@@ -15,6 +16,19 @@ export const app            = initializeApp(firebaseConfig);
 export const auth           = getAuth(app);
 export const db             = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
+
+const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string;
+
+if (import.meta.env.DEV) {
+  (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+}
+
+if (recaptchaSiteKey) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 
 if (import.meta.env.DEV) {
   connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });

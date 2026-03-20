@@ -4,6 +4,7 @@
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     updateProfile,
+    sendPasswordResetEmail,
   } from "firebase/auth";
   import { auth } from "../firebase";
   import { showSnackbar } from "../stores/snackbar";
@@ -16,26 +17,47 @@
   let password    = $state("");
   let displayName = $state("");
   let gender      = $state<Gender | null>(null);
-  let isSignUp    = $state(false);
-  let loading     = $state(false);
+  let mode         = $state<"sign-in" | "sign-up" | "forgot-password">("sign-in");
+  let loading      = $state(false);
+  let resetLoading = $state(false);
+  let website      = $state("");
+
+  async function handlePasswordReset() {
+    if (website) return;
+    if (!email) {
+      showSnackbar("Please enter your email address", "error");
+      return;
+    }
+    resetLoading = true;
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch {
+      // Silently swallow — always show the same response to prevent email enumeration.
+    } finally {
+      resetLoading = false;
+    }
+    showSnackbar("If an account exists for that email, we've sent a reset link.");
+    mode = "sign-in";
+  }
 
   async function handleEmailAuth() {
+    if (website) return;
     if (!email || !password) {
       showSnackbar("Email and password are required", "error");
       return;
     }
-    if (isSignUp && !displayName.trim()) {
+    if (mode === "sign-up" && !displayName.trim()) {
       showSnackbar("Display name is required", "error");
       return;
     }
-    if (isSignUp && !gender) {
+    if (mode === "sign-up" && !gender) {
       showSnackbar("Please select your gender", "error");
       return;
     }
 
     loading = true;
     try {
-      if (isSignUp) {
+      if (mode === "sign-up") {
         // Set gender BEFORE creating the account so onAuthStateChanged picks it up
         // in a single provisionPlayer call — avoids a concurrent-setDoc race.
         setSignupGender(gender!);
@@ -58,6 +80,7 @@
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
+
     } catch (err: unknown) {
       showSnackbar(getErrorMessage(err), "error");
     } finally {
@@ -74,6 +97,7 @@
         "auth/email-already-in-use": "Email already in use",
         "auth/weak-password":        "Password must be at least 6 characters",
         "auth/invalid-email":        "Invalid email address",
+        "auth/invalid-credential":   "Incorrect email or password",
         "auth/popup-closed-by-user": "Sign-in popup was closed",
       };
       return messages[code] ?? "Authentication failed. Please try again.";
@@ -92,79 +116,139 @@
       </p>
     </div>
 
-    <form onsubmit={(e) => { e.preventDefault(); handleEmailAuth(); }} class="email-form">
-      {#if isSignUp}
+    {#if mode === "forgot-password"}
+      <form onsubmit={(e) => { e.preventDefault(); handlePasswordReset(); }} class="email-form">
+        <div class="hp-field" aria-hidden="true">
+          <label for="website">Website</label>
+          <input id="website" type="text" bind:value={website} tabindex="-1" autocomplete="off" />
+        </div>
+        <p class="body-medium" style="color:var(--md-on-surface-variant)">
+          Enter your email and we'll send you a reset link.
+        </p>
+
         <div class="md-field">
-          <label for="display-name">Display name</label>
+          <label for="email-reset">Email</label>
           <input
-            id="display-name"
-            type="text"
-            bind:value={displayName}
-            placeholder="Your in-app name"
-            autocomplete="name"
+            id="email-reset"
+            type="email"
+            bind:value={email}
+            placeholder="you@example.com"
+            autocomplete="email"
+          />
+        </div>
+
+        <button class="md-btn-filled" type="submit" disabled={resetLoading}>
+          {#if resetLoading}
+            <LoadingSpinner size="sm" />
+          {:else}
+            Send reset email
+          {/if}
+        </button>
+      </form>
+
+      <p class="toggle-mode body-small">
+        <button class="md-btn-text" type="button" onclick={() => (mode = "sign-in")}>
+          Back to sign in
+        </button>
+      </p>
+    {:else}
+      <form onsubmit={(e) => { e.preventDefault(); handleEmailAuth(); }} class="email-form">
+        <div class="hp-field" aria-hidden="true">
+          <label for="website2">Website</label>
+          <input id="website2" type="text" bind:value={website} tabindex="-1" autocomplete="off" />
+        </div>
+        {#if mode === "sign-up"}
+          <div class="md-field">
+            <label for="display-name">Display name</label>
+            <input
+              id="display-name"
+              type="text"
+              bind:value={displayName}
+              placeholder="Your in-app name"
+              autocomplete="name"
+            />
+          </div>
+
+          <div class="md-field">
+            <label>Gender</label>
+            <div class="gender-toggle">
+              <button
+                type="button"
+                class="gender-btn"
+                class:active={gender === "male"}
+                onclick={() => (gender = "male")}
+              >Male</button>
+              <button
+                type="button"
+                class="gender-btn"
+                class:active={gender === "female"}
+                onclick={() => (gender = "female")}
+              >Female</button>
+            </div>
+          </div>
+        {/if}
+
+        <div class="md-field">
+          <label for="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            bind:value={email}
+            placeholder="you@example.com"
+            autocomplete="email"
           />
         </div>
 
         <div class="md-field">
-          <label>Gender</label>
-          <div class="gender-toggle">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            bind:value={password}
+            placeholder={mode === "sign-up" ? "At least 6 characters" : "Your password"}
+            autocomplete={mode === "sign-up" ? "new-password" : "current-password"}
+          />
+          {#if mode === "sign-in"}
             <button
+              class="md-btn-text"
               type="button"
-              class="gender-btn"
-              class:active={gender === "male"}
-              onclick={() => (gender = "male")}
-            >Male</button>
-            <button
-              type="button"
-              class="gender-btn"
-              class:active={gender === "female"}
-              onclick={() => (gender = "female")}
-            >Female</button>
-          </div>
+              style="align-self:flex-end; margin-top:2px;"
+              onclick={() => (mode = "forgot-password")}
+            >Forgot password?</button>
+          {/if}
         </div>
-      {/if}
 
-      <div class="md-field">
-        <label for="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          bind:value={email}
-          placeholder="you@example.com"
-          autocomplete="email"
-        />
-      </div>
+        <button class="md-btn-filled" type="submit" disabled={loading}>
+          {#if loading}
+            <LoadingSpinner size="sm" />
+          {:else}
+            {mode === "sign-up" ? "Create account" : "Sign in"}
+          {/if}
+        </button>
+      </form>
 
-      <div class="md-field">
-        <label for="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          bind:value={password}
-          placeholder={isSignUp ? "At least 6 characters" : "Your password"}
-          autocomplete={isSignUp ? "new-password" : "current-password"}
-        />
-      </div>
-
-      <button class="md-btn-filled w-full" type="submit" disabled={loading}>
-        {#if loading}
-          <LoadingSpinner size="sm" />
-        {:else}
-          {isSignUp ? "Create account" : "Sign in"}
-        {/if}
-      </button>
-    </form>
-
-    <p class="toggle-mode body-small">
-      {isSignUp ? "Already have an account?" : "Don't have an account?"}
-      <button class="md-btn-text" type="button" onclick={() => { isSignUp = !isSignUp; gender = null; }}>
-        {isSignUp ? "Sign in" : "Create account"}
-      </button>
-    </p>
+      <p class="toggle-mode body-small">
+        {mode === "sign-up" ? "Already have an account?" : "Don't have an account?"}
+        <button class="md-btn-text" type="button" onclick={() => { mode = mode === "sign-up" ? "sign-in" : "sign-up"; gender = null; }}>
+          {mode === "sign-up" ? "Sign in" : "Create account"}
+        </button>
+      </p>
+    {/if}
   </div>
 </div>
 
 <style>
+  .hp-field {
+    position: absolute;
+    left: -9999px;
+    top: -9999px;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+
   .login-page {
     min-height: 100vh;
     display: flex;
@@ -236,5 +320,15 @@
     align-items: center;
     justify-content: center;
     gap: 0;
+  }
+
+  .md-field label {
+    text-align: center;
+  }
+
+  .email-form .md-btn-filled {
+    align-self: center;
+    justify-content: center;
+    width: 70%;
   }
 </style>
