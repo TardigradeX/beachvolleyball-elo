@@ -8,8 +8,8 @@
   let menuOpen = $state(false);
 
   const navLinks = [
-    { href: "#/", label: "MyBeach", icon: "dashboard" },
-    { href: "#/leaderboard", label: "Rankings", icon: "leaderboard" },
+    { href: "#/", label: "MyBeach" },
+    { href: "#/leaderboard", label: "Rankings" },
   ];
 
   function navigate(href: string) {
@@ -43,7 +43,6 @@
           href={link.href}
           onclick={(e) => { e.preventDefault(); navigate(link.href); }}
         >
-          <span class="material-icons">{link.icon}</span>
           {link.label}
         </a>
       {/each}
@@ -138,17 +137,15 @@
   .nav-link {
     display: flex;
     align-items: center;
-    gap: 6px;
     color: var(--md-on-surface-variant);
     text-decoration: none;
     padding: 8px 12px;
     border-radius: var(--md-radius-full);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     font-weight: 500;
     transition: background 0.15s, color 0.15s;
   }
   .nav-link:hover { background: var(--md-surface-variant); color: var(--md-on-surface); }
-  .nav-link .material-icons { font-size: 18px; }
 
   .navbar-actions {
     margin-left: auto;
