@@ -317,7 +317,7 @@
 
   .profile-card {
     padding: var(--md-spacing-lg);
-    background: linear-gradient(135deg, rgb(180, 50, 20) 0%, rgb(120, 25, 8) 100%);
+    background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
     color: var(--md-on-primary);
   }
 

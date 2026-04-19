@@ -3,6 +3,7 @@
   import { auth } from "../../firebase";
   import { currentUser } from "../../stores/auth";
   import { showSnackbar } from "../../stores/snackbar";
+  import logoUrl from "../../assets/VC_Weil_Logo_neu.bmp";
 
   let menuOpen = $state(false);
 
@@ -32,8 +33,7 @@
 <header class="navbar">
   <div class="navbar-inner">
     <a class="navbar-brand" href="#/" onclick={(e) => { e.preventDefault(); navigate("#/"); }}>
-      <span class="material-icons brand-icon">sports_volleyball</span>
-      <span class="brand-text">Beach ELO</span>
+      <img class="brand-logo" src={logoUrl} alt="VC Weil" />
     </a>
 
     <nav class="nav-links">
@@ -98,8 +98,8 @@
     left: 0;
     right: 0;
     height: var(--navbar-height);
-    background: var(--md-primary);
-    color: var(--md-on-primary);
+    background: var(--md-surface);
+    color: var(--md-on-surface);
     z-index: 200;
     box-shadow: var(--md-elevation-2);
   }
@@ -123,8 +123,11 @@
     flex-shrink: 0;
   }
 
-  .brand-icon { font-size: 28px; }
-  .brand-text { font-size: 1.25rem; font-weight: 700; letter-spacing: .01em; }
+  .brand-logo {
+    height: calc(var(--navbar-height) - 8px);
+    width: auto;
+    display: block;
+  }
 
   .nav-links {
     display: flex;
@@ -136,7 +139,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    color: rgba(255,255,255,.85);
+    color: var(--md-on-surface-variant);
     text-decoration: none;
     padding: 8px 12px;
     border-radius: var(--md-radius-full);
@@ -144,14 +147,20 @@
     font-weight: 500;
     transition: background 0.15s, color 0.15s;
   }
-  .nav-link:hover { background: rgba(255,255,255,.15); color: #fff; }
+  .nav-link:hover { background: var(--md-surface-variant); color: var(--md-on-surface); }
   .nav-link .material-icons { font-size: 18px; }
 
-  .navbar-actions { margin-left: auto; position: relative; }
+  .navbar-actions {
+    margin-left: auto;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--md-spacing-md);
+  }
 
   .avatar-btn {
     background: none;
-    border: 2px solid rgba(255,255,255,.6);
+    border: 2px solid var(--md-outline);
     border-radius: 50%;
     cursor: pointer;
     padding: 0;
