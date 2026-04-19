@@ -1,10 +1,10 @@
 /* ── Material Design 3 CSS Variables ──────────────────────────────────────── */
 :root {
-  /* Primary: black */
-  --md-primary: #000000;
+  /* Primary: soft charcoal */
+  --md-primary: #1a1a1a;
   --md-on-primary: #ffffff;
-  --md-primary-container: #e5e5e5;
-  --md-on-primary-container: #000000;
+  --md-primary-container: #e8e8ea;
+  --md-on-primary-container: #1a1a1a;
 
   /* Secondary: muted warm grey */
   --md-secondary: #5c5c5c;
@@ -21,7 +21,7 @@
   --md-outline-variant: #e5e5e5;
 
   /* Background */
-  --md-background: #f2f2f2;
+  --md-background: #f4f5f7;
 
   /* Error */
   --md-error: #d32f2f;
@@ -36,10 +36,10 @@
   --md-warning: #f9a825;
   --md-warning-container: #fff9c4;
 
-  /* Elevation (box-shadows) */
-  --md-elevation-1: 0 1px 2px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.08);
-  --md-elevation-2: 0 1px 4px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.10);
-  --md-elevation-3: 0 2px 8px rgba(0,0,0,.16), 0 4px 12px rgba(0,0,0,.12);
+  /* Elevation (layered soft shadows) */
+  --md-elevation-1: 0 1px 2px rgba(17,24,39,.04), 0 1px 3px rgba(17,24,39,.04);
+  --md-elevation-2: 0 1px 2px rgba(17,24,39,.04), 0 4px 12px rgba(17,24,39,.06);
+  --md-elevation-3: 0 2px 4px rgba(17,24,39,.05), 0 8px 24px rgba(17,24,39,.08);
 
   /* Shape */
   --md-radius-xs: 4px;
