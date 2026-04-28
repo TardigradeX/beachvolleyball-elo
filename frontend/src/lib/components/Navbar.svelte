@@ -1,11 +1,16 @@
 <script lang="ts">
-  import { signOut } from "firebase/auth";
+  import { signOut, updateProfile } from "firebase/auth";
   import { auth } from "../../firebase";
-  import { currentUser } from "../../stores/auth";
+  import { currentUser, refreshCurrentUser } from "../../stores/auth";
   import { showSnackbar } from "../../stores/snackbar";
+  import { updateDisplayName } from "../../lib/firestore/players";
+  import LoadingSpinner from "./LoadingSpinner.svelte";
   import logoUrl from "../../assets/VC_Weil_Logo_neu.bmp";
 
   let menuOpen = $state(false);
+  let editing  = $state(false);
+  let nameDraft = $state("");
+  let saving   = $state(false);
 
   const navLinks = [
     { href: "#/", label: "MyBeach" },
@@ -14,7 +19,12 @@
 
   function navigate(href: string) {
     window.location.hash = href.replace("#", "");
+    closeMenu();
+  }
+
+  function closeMenu() {
     menuOpen = false;
+    editing = false;
   }
 
   async function handleSignOut() {
@@ -22,6 +32,53 @@
       await signOut(auth);
     } catch {
       showSnackbar("Sign out failed", "error");
+    }
+  }
+
+  function startEdit() {
+    nameDraft = $currentUser?.displayName ?? "";
+    editing = true;
+  }
+
+  async function handleChangeName() {
+    if (saving) return;
+    const user = $currentUser;
+    if (!user) return;
+
+    const name = nameDraft.trim();
+    if (!name) {
+      showSnackbar("Name cannot be empty", "error");
+      return;
+    }
+    if (name.length < 2 || name.length > 30) {
+      showSnackbar("Name must be 2–30 characters", "error");
+      return;
+    }
+    if (name === user.displayName) {
+      editing = false;
+      return;
+    }
+
+    saving = true;
+    try {
+      await Promise.all([
+        updateDisplayName(user.uid, name),
+        auth.currentUser ? updateProfile(auth.currentUser, { displayName: name }) : Promise.resolve(),
+      ]);
+      refreshCurrentUser();
+      showSnackbar("Name updated");
+      closeMenu();
+    } catch {
+      showSnackbar("Could not update name", "error");
+    } finally {
+      saving = false;
+    }
+  }
+
+  function onEditKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      editing = false;
     }
   }
 
@@ -73,18 +130,69 @@
                 {getInitial($currentUser?.displayName ?? $currentUser?.email)}
               {/if}
             </div>
-            <div>
-              <div class="title-small">{$currentUser?.displayName ?? "Player"}</div>
-              <div class="body-small" style="color:var(--md-on-surface-variant)">{$currentUser?.email}</div>
-            </div>
+            {#if editing}
+              <form
+                class="edit-name-form"
+                onsubmit={(e) => { e.preventDefault(); handleChangeName(); }}
+              >
+                <div class="md-field edit-name-field">
+                  <input
+                    type="text"
+                    bind:value={nameDraft}
+                    onkeydown={onEditKeydown}
+                    placeholder="Display name"
+                    autocomplete="name"
+                    maxlength="30"
+                    aria-label="Display name"
+                    disabled={saving}
+                  />
+                </div>
+                <div class="edit-name-actions">
+                  <button
+                    type="submit"
+                    class="icon-btn"
+                    disabled={saving}
+                    aria-label="Save name"
+                    title="Save"
+                  >
+                    {#if saving}
+                      <LoadingSpinner size="sm" />
+                    {:else}
+                      <span class="material-icons">check</span>
+                    {/if}
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    disabled={saving}
+                    onclick={() => (editing = false)}
+                    aria-label="Cancel"
+                    title="Cancel"
+                  >
+                    <span class="material-icons">close</span>
+                  </button>
+                </div>
+              </form>
+            {:else}
+              <div>
+                <div class="title-small">{$currentUser?.displayName ?? "Player"}</div>
+                <div class="body-small" style="color:var(--md-on-surface-variant)">{$currentUser?.email}</div>
+              </div>
+            {/if}
           </div>
           <div class="md-divider"></div>
+          {#if !editing}
+            <button class="menu-item" onclick={startEdit}>
+              <span class="material-icons">edit</span>
+              Change name
+            </button>
+          {/if}
           <button class="menu-item" onclick={handleSignOut}>
             <span class="material-icons">logout</span>
             Sign out
           </button>
         </div>
-        <div class="menu-backdrop" onclick={() => (menuOpen = false)} role="presentation"></div>
+        <div class="menu-backdrop" onclick={closeMenu} role="presentation"></div>
       {/if}
     </div>
   </div>
@@ -202,4 +310,43 @@
     inset: 0;
     z-index: 299;
   }
+
+  .edit-name-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .edit-name-field {
+    margin: 0;
+  }
+  .edit-name-field :global(input) {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .edit-name-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: none;
+    border-radius: var(--md-radius-full);
+    color: var(--md-on-surface);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .icon-btn:hover:not(:disabled) { background: var(--md-surface-variant); }
+  .icon-btn:disabled { cursor: default; opacity: 0.6; }
+  .icon-btn .material-icons { font-size: 20px; }
 </style>

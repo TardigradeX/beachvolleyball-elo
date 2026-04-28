@@ -49,6 +49,15 @@ onAuthStateChanged(auth, async (user) => {
 export const isLoggedIn = derived(currentUser, ($u) => $u !== null);
 
 /**
+ * Re-publish the current Firebase Auth user into the store. Use after
+ * `updateProfile()` — it mutates `auth.currentUser` in place but does not
+ * trigger `onAuthStateChanged`, so subscribers won't re-render otherwise.
+ */
+export function refreshCurrentUser() {
+  if (auth.currentUser) currentUser.set(auth.currentUser);
+}
+
+/**
  * True when the player is authenticated but has not yet set their gender.
  * Triggers the GenderSetup screen.
  */
