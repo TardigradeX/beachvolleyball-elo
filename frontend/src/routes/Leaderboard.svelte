@@ -65,6 +65,13 @@
     if (total === 0) return "—";
     return `${Math.round((w / total) * 100)}%`;
   }
+
+  function hasPlayed(p: Player): boolean {
+    return displayWins(p) + displayLosses(p) > 0;
+  }
+
+  const rankedPlayers   = $derived(players.filter(hasPlayed));
+  const unrankedPlayers = $derived(players.filter((p) => !hasPlayed(p)));
 </script>
 
 <div class="leaderboard">
@@ -101,57 +108,105 @@
       </p>
     </div>
   {:else}
-    <div class="table-card md-card">
-      <table class="rankings-table">
-        <thead>
-          <tr>
-            <th class="col-rank">Rank</th>
-            <th class="col-player">Player</th>
-            <th class="col-elo">ELO</th>
-            <th class="col-wl">W / L</th>
-            <th class="col-rate">Win %</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each players as player, i (player.uid)}
-            <tr class="player-row" class:is-me={player.uid === uid}>
-              <td class="col-rank">
-                <span class="rank-display">{rankIcon(i + 1)}</span>
-              </td>
-              <td class="col-player">
-                <div class="player-cell">
-                  <div class="md-avatar sm">
-                    {#if player.photoUrl}
-                      <img src={player.photoUrl} alt={player.displayName} />
-                    {:else}
-                      {getInitial(player.displayName)}
-                    {/if}
-                  </div>
-                  <span class="player-name">
-                    {player.displayName}
-                    {#if player.uid === uid}
-                      <span class="you-tag">You</span>
-                    {/if}
-                  </span>
-                </div>
-              </td>
-              <td class="col-elo">
-                <span class="elo-value">{displayElo(player)}</span>
-              </td>
-              <td class="col-wl">
-                <span class="elo-positive">{displayWins(player)}</span>
-                <span style="color:var(--md-outline)"> / </span>
-                <span class="elo-negative">{displayLosses(player)}</span>
-              </td>
-              <td class="col-rate">{winRate(player)}</td>
+    {#if rankedPlayers.length > 0}
+      <div class="table-card md-card">
+        <table class="rankings-table">
+          <thead>
+            <tr>
+              <th class="col-rank">Rank</th>
+              <th class="col-player">Player</th>
+              <th class="col-elo">ELO</th>
+              <th class="col-wl">W / L</th>
+              <th class="col-rate">Win %</th>
             </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-    <p class="body-small" style="color:var(--md-on-surface-variant);text-align:center">
-      Top {players.length} players · Reload to refresh
-    </p>
+          </thead>
+          <tbody>
+            {#each rankedPlayers as player, i (player.uid)}
+              <tr class="player-row" class:is-me={player.uid === uid}>
+                <td class="col-rank">
+                  <span class="rank-display">{rankIcon(i + 1)}</span>
+                </td>
+                <td class="col-player">
+                  <div class="player-cell">
+                    <div class="md-avatar sm">
+                      {#if player.photoUrl}
+                        <img src={player.photoUrl} alt={player.displayName} />
+                      {:else}
+                        {getInitial(player.displayName)}
+                      {/if}
+                    </div>
+                    <span class="player-name">
+                      {player.displayName}
+                      {#if player.uid === uid}
+                        <span class="you-tag">You</span>
+                      {/if}
+                    </span>
+                  </div>
+                </td>
+                <td class="col-elo">
+                  <span class="elo-value">{displayElo(player)}</span>
+                </td>
+                <td class="col-wl">
+                  <span class="elo-positive">{displayWins(player)}</span>
+                  <span style="color:var(--md-outline)"> / </span>
+                  <span class="elo-negative">{displayLosses(player)}</span>
+                </td>
+                <td class="col-rate">{winRate(player)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+      <p class="body-small" style="color:var(--md-on-surface-variant);text-align:center">
+        Top {rankedPlayers.length} players · Reload to refresh
+      </p>
+    {:else}
+      <div class="empty-state md-card">
+        <span class="material-icons" style="font-size:64px;color:var(--md-outline)">emoji_events</span>
+        <p class="title-medium">No rankings yet</p>
+        <p class="body-medium" style="color:var(--md-on-surface-variant)">
+          Complete some matches to appear on the leaderboard!
+        </p>
+      </div>
+    {/if}
+
+    {#if unrankedPlayers.length > 0}
+      <h2 class="title-medium unranked-heading">Unranked players</h2>
+      <div class="table-card md-card">
+        <table class="rankings-table">
+          <thead>
+            <tr>
+              <th class="col-player">Player</th>
+              <th class="col-status">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each unrankedPlayers as player (player.uid)}
+              <tr class="player-row" class:is-me={player.uid === uid}>
+                <td class="col-player">
+                  <div class="player-cell">
+                    <div class="md-avatar sm">
+                      {#if player.photoUrl}
+                        <img src={player.photoUrl} alt={player.displayName} />
+                      {:else}
+                        {getInitial(player.displayName)}
+                      {/if}
+                    </div>
+                    <span class="player-name">
+                      {player.displayName}
+                      {#if player.uid === uid}
+                        <span class="you-tag">You</span>
+                      {/if}
+                    </span>
+                  </div>
+                </td>
+                <td class="col-status">unranked</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -226,10 +281,23 @@
   .player-row:hover { background: var(--md-surface-variant); }
   .player-row.is-me:hover { background: var(--md-primary-container); filter: brightness(0.97); }
 
-  .col-rank  { width: 56px; text-align: center; }
-  .col-elo   { text-align: right; font-family: var(--md-font-mono); }
-  .col-wl    { text-align: right; white-space: nowrap; }
-  .col-rate  { text-align: right; width: 72px; }
+  .col-rank   { width: 56px; text-align: center; }
+  .col-elo    { text-align: right; font-family: var(--md-font-mono); }
+  .col-wl     { text-align: right; white-space: nowrap; }
+  .col-rate   { text-align: right; width: 72px; }
+  .col-status {
+    text-align: right;
+    color: var(--md-on-surface-variant);
+    font-style: italic;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-size: 0.75rem;
+  }
+
+  .unranked-heading {
+    margin-top: var(--md-spacing-md);
+    color: var(--md-on-surface-variant);
+  }
 
   .rank-display { display: flex; justify-content: center; font-size: 1.25rem; }
 
